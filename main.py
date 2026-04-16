@@ -40,7 +40,7 @@ def main(page: ft.Page):
             prefix_icon=ft.Icons.DNS,
         )
         port_field = ft.TextField(
-            label="Puerto", value="3306", width=300,
+            label="Puerto", value="3307", width=300,
             border_color=ft.Colors.INDIGO_400, focused_border_color=ft.Colors.INDIGO_200,
             prefix_icon=ft.Icons.NUMBERS,
         )

@@ -154,6 +154,13 @@ def build_console_view(page: ft.Page):
 
     refresh_dbs()
 
+    # --- Atajo Ctrl+Enter ---
+    def on_keyboard(e: ft.KeyboardEvent):
+        if e.key == "Enter" and e.ctrl:
+            execute_query(e)
+
+    page.on_keyboard_event = on_keyboard
+
     # Botones de ejemplo
     example_queries = [
         ("SHOW DATABASES", "SHOW DATABASES"),
@@ -199,7 +206,7 @@ def build_console_view(page: ft.Page):
                         query_input,
                         ft.Row([
                             ft.ElevatedButton(
-                                "▶ Ejecutar",
+                                "Ejecutar",
                                 icon=ft.Icons.PLAY_ARROW,
                                 on_click=execute_query,
                                 style=ft.ButtonStyle(
@@ -215,6 +222,7 @@ def build_console_view(page: ft.Page):
                                 style=ft.ButtonStyle(color=ft.Colors.WHITE54,
                                                      shape=ft.RoundedRectangleBorder(radius=8)),
                             ),
+                            ft.Text("Ctrl+Enter para ejecutar", size=11, color=ft.Colors.WHITE38, italic=True),
                         ]),
                     ]),
                     bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.INDIGO),

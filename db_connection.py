@@ -103,6 +103,6 @@ class DBConnection:
         return {
             "server_version": conn.get_server_info(),
             "server_host": self._config.get("host", ""),
-            "server_port": self._config.get("port", 3306),
+            "server_port": self._config.get("port", 3307),
             "user": self._config.get("user", ""),
         }

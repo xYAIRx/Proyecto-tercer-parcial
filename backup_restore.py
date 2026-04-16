@@ -68,9 +68,11 @@ def build_backup_restore_view(page: ft.Page):
                 f"--port={config['port']}",
                 f"--user={config['user']}",
                 f"--password={config['password']}",
+                "--column-statistics=0",
                 "--routines",
                 "--triggers",
                 "--events",
+                "--databases",
                 database,
             ]
             with open(path, "w", encoding="utf-8") as f:
@@ -88,7 +90,7 @@ def build_backup_restore_view(page: ft.Page):
 
     # --- Restauración ---
     db_dropdown_restore = ft.Dropdown(
-        label="Base de datos destino",
+        label="Base de datos destino (Opcional)",
         width=300,
         border_color=ft.Colors.BLUE_400,
         focused_border_color=ft.Colors.BLUE_200,
@@ -111,14 +113,15 @@ def build_backup_restore_view(page: ft.Page):
     def do_restore(e):
         database = db_dropdown_restore.value
         path = restore_path.value
-        if not database:
-            log("⚠️ Selecciona una base de datos destino.")
-            return
         if not path or not os.path.exists(path):
-            log("⚠️ Archivo no encontrado.")
+            log("⚠️ Archivo no encontrado o no válido.")
             return
 
-        log(f"🔄 Restaurando '{path}' en '{database}'...")
+        if database:
+            log(f"🔄 Restaurando '{path}' en '{database}'...")
+        else:
+            log(f"🔄 Restaurando '{path}' de forma global...")
+
         try:
             cmd = [
                 "mysql",
@@ -126,15 +129,24 @@ def build_backup_restore_view(page: ft.Page):
                 f"--port={config['port']}",
                 f"--user={config['user']}",
                 f"--password={config['password']}",
-                database,
             ]
+            if database:
+                cmd.append(database)
+
             with open(path, "r", encoding="utf-8") as f:
                 result = subprocess.run(cmd, stdin=f, stderr=subprocess.PIPE, text=True, timeout=600)
 
             if result.returncode == 0:
-                log(f"✅ Restauración completada en '{database}'.")
+                if database:
+                    log(f"✅ Restauración completada en '{database}'.")
+                else:
+                    log("✅ Restauración global completada.")
             else:
-                log(f"❌ Error: {result.stderr.strip()}")
+                stderr_text = result.stderr.strip()
+                if "No database selected" in stderr_text:
+                    log(f"❌ Error: El archivo '{path}' no especifica su base de datos original. Por favor, selecciona una 'Base de datos destino' en el menú.")
+                else:
+                    log(f"❌ Error: {stderr_text}")
         except FileNotFoundError:
             log("❌ mysql CLI no encontrado. Asegúrate de que esté en el PATH.")
         except Exception as ex:
@@ -143,9 +155,8 @@ def build_backup_restore_view(page: ft.Page):
     def refresh_dbs(e=None):
         try:
             databases = db.get_databases()
-            options = [ft.dropdown.Option(d) for d in databases]
-            db_dropdown_backup.options = options
-            db_dropdown_restore.options = options
+            db_dropdown_backup.options = [ft.dropdown.Option(d) for d in databases]
+            db_dropdown_restore.options = [ft.dropdown.Option(d) for d in databases]
             page.update()
         except Exception as ex:
             log(f"❌ Error al listar bases de datos: {ex}")
