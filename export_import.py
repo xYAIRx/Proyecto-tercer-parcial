@@ -292,7 +292,154 @@ def build_export_import_view(page: ft.Page):
         return f"{b:.1f} TB"
 
     # ================================================================
-    # EXPORTACIÓN
+    # EXPORTACIÓN COMPLETA DE BASE DE DATOS (mysqldump)
+    # ================================================================
+    full_export_db = ft.Dropdown(
+        label="Base de datos", width=300,
+        border_color=ft.Colors.ORANGE_400,
+        focused_border_color=ft.Colors.ORANGE_200,
+    )
+    full_export_path = ft.TextField(
+        label="Ruta de exportación (.sql)",
+        width=500,
+        value=os.path.join(os.path.expanduser("~"), "full_export.sql"),
+        border_color=ft.Colors.ORANGE_400,
+        focused_border_color=ft.Colors.ORANGE_200,
+        prefix_icon=ft.Icons.FILE_PRESENT,
+    )
+    full_export_progress = ft.ProgressBar(visible=False, color=ft.Colors.ORANGE_400)
+    full_export_status = ft.Text("", size=13)
+    full_export_include_structure = ft.Checkbox(
+        label="Incluir estructura (CREATE TABLE)", value=True,
+        check_color=ft.Colors.WHITE, active_color=ft.Colors.ORANGE_400,
+    )
+    full_export_include_data = ft.Checkbox(
+        label="Incluir datos (INSERT INTO)", value=True,
+        check_color=ft.Colors.WHITE, active_color=ft.Colors.ORANGE_400,
+    )
+    full_export_include_routines = ft.Checkbox(
+        label="Incluir rutinas, triggers y eventos", value=True,
+        check_color=ft.Colors.WHITE, active_color=ft.Colors.ORANGE_400,
+    )
+
+    def pick_full_export_path(e: ft.FilePickerResultEvent):
+        if e.path:
+            full_export_path.value = e.path
+            page.update()
+
+    full_export_picker = ft.FilePicker(on_result=pick_full_export_path)
+    page.overlay.append(full_export_picker)
+
+    def do_full_export(e):
+        database = full_export_db.value
+        path = full_export_path.value
+        if not path:
+            log("Especifica una ruta para el archivo de exportación.")
+            return
+
+        is_all_dbs = (database == "* (Todas las bases de datos)")
+
+        full_export_progress.visible = True
+        full_export_status.value = "Exportando..."
+        full_export_status.color = ft.Colors.ORANGE_200
+        page.update()
+
+        def run_export():
+            try:
+                config = db._config
+                cmd = [
+                    "mysqldump",
+                    f"--host={config['host']}",
+                    f"--port={config['port']}",
+                    f"--user={config['user']}",
+                    f"--password={config['password']}",
+                    "--column-statistics=0",
+                ]
+
+                # Opciones de contenido
+                if full_export_include_routines.value:
+                    cmd.extend(["--routines", "--triggers", "--events"])
+                if not full_export_include_data.value:
+                    cmd.append("--no-data")
+                if not full_export_include_structure.value:
+                    cmd.append("--no-create-info")
+
+                if is_all_dbs:
+                    cmd.append("--all-databases")
+                    log("Exportando TODAS las bases de datos...")
+                elif database:
+                    cmd.extend(["--databases", database])
+                    log(f"Exportando base de datos '{database}'...")
+                else:
+                    log("Selecciona una base de datos.")
+                    full_export_progress.visible = False
+                    page.update()
+                    return
+
+                with open(path, "w", encoding="utf-8") as f:
+                    result = subprocess.run(
+                        cmd, stdout=f, stderr=subprocess.PIPE,
+                        text=True, timeout=600
+                    )
+
+                # Procesar resultado
+                stderr = result.stderr.strip() if result.stderr else ""
+                # Filtrar warnings de contraseña
+                error_lines = []
+                for line in stderr.splitlines():
+                    if "using a password on the command line" in line.lower():
+                        continue
+                    if line.strip():
+                        error_lines.append(line.strip())
+
+                if result.returncode == 0 and not error_lines:
+                    file_size = os.path.getsize(path)
+                    size_str = _format_size(file_size)
+                    if is_all_dbs:
+                        full_export_status.value = "Todas las BDs exportadas"
+                    else:
+                        full_export_status.value = f"'{database}' exportada"
+                    full_export_status.color = ft.Colors.GREEN_300
+                    log(f"Exportación completada: {path} ({size_str})")
+                elif error_lines:
+                    for err in error_lines[:5]:
+                        log(f"Advertencia: {err[:200]}")
+                    if result.returncode == 0:
+                        file_size = os.path.getsize(path)
+                        size_str = _format_size(file_size)
+                        full_export_status.value = "Exportado con advertencias"
+                        full_export_status.color = ft.Colors.AMBER_300
+                        log(f"Exportación completada con advertencias: {path} ({size_str})")
+                    else:
+                        full_export_status.value = "Error al exportar"
+                        full_export_status.color = ft.Colors.RED_300
+                        log(f"Error en exportación: código {result.returncode}")
+                else:
+                    full_export_status.value = "Error al exportar"
+                    full_export_status.color = ft.Colors.RED_300
+                    log(f"Error: {stderr[:300]}")
+
+            except FileNotFoundError:
+                log("mysqldump no encontrado. Asegúrate de que esté en el PATH del sistema.")
+                log("Tip: En Windows, agrega la carpeta bin de MariaDB/MySQL al PATH.")
+                full_export_status.value = "mysqldump no encontrado"
+                full_export_status.color = ft.Colors.RED_300
+            except subprocess.TimeoutExpired:
+                log("La exportación tardó demasiado (más de 10 minutos).")
+                full_export_status.value = "Timeout"
+                full_export_status.color = ft.Colors.RED_300
+            except Exception as ex:
+                log(f"Error inesperado: {ex}")
+                full_export_status.value = "Error"
+                full_export_status.color = ft.Colors.RED_300
+            finally:
+                full_export_progress.visible = False
+                page.update()
+
+        threading.Thread(target=run_export, daemon=True).start()
+
+    # ================================================================
+    # EXPORTACIÓN POR TABLA (CSV, JSON, SQL)
     # ================================================================
     export_db = ft.Dropdown(label="Base de datos", width=250, border_color=ft.Colors.AMBER_400,
                             focused_border_color=ft.Colors.AMBER_200)
@@ -617,6 +764,10 @@ def build_export_import_view(page: ft.Page):
     def refresh_dbs(e=None):
         try:
             databases = db.get_databases()
+            full_export_db.options = (
+                [ft.dropdown.Option("* (Todas las bases de datos)")] +
+                [ft.dropdown.Option(d) for d in databases]
+            )
             export_db.options = [ft.dropdown.Option(d) for d in databases]
             import_db.options = [ft.dropdown.Option(d) for d in databases]
             page.update()
@@ -685,10 +836,62 @@ def build_export_import_view(page: ft.Page):
                 ),
                 ft.Container(height=15),
 
-                # Exportación
+                # Exportar BD completa
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("Exportar Datos", size=18, weight=ft.FontWeight.W_600, color=ft.Colors.AMBER_200),
+                        ft.Row([
+                            ft.Icon(ft.Icons.CLOUD_UPLOAD, size=24, color=ft.Colors.ORANGE_300),
+                            ft.Text("Exportar Base de Datos Completa",
+                                    size=18, weight=ft.FontWeight.W_600, color=ft.Colors.ORANGE_200),
+                        ]),
+                        ft.Text("Exporta estructura + datos usando mysqldump. Puedes exportar una BD o todas a la vez.",
+                                size=12, color=ft.Colors.WHITE54),
+                        ft.Container(height=5),
+                        ft.Row([full_export_db], alignment=ft.MainAxisAlignment.START),
+                        ft.Row([
+                            full_export_include_structure,
+                            full_export_include_data,
+                            full_export_include_routines,
+                        ], wrap=True),
+                        ft.Row([
+                            full_export_path,
+                            ft.IconButton(
+                                ft.Icons.FOLDER_OPEN,
+                                on_click=lambda _: full_export_picker.save_file(
+                                    allowed_extensions=["sql"], file_name="full_export.sql"
+                                ),
+                                tooltip="Seleccionar ruta",
+                                icon_color=ft.Colors.ORANGE_300,
+                                icon_size=28,
+                            ),
+                        ]),
+                        full_export_progress,
+                        full_export_status,
+                        ft.ElevatedButton(
+                            "Exportar Base de Datos",
+                            icon=ft.Icons.UPLOAD_FILE,
+                            on_click=do_full_export,
+                            height=45,
+                            style=ft.ButtonStyle(
+                                bgcolor=ft.Colors.ORANGE_700,
+                                color=ft.Colors.WHITE,
+                                shape=ft.RoundedRectangleBorder(radius=10),
+                                elevation=4,
+                            ),
+                        ),
+                    ]),
+                    bgcolor=ft.Colors.with_opacity(0.2, ft.Colors.ORANGE),
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.ORANGE_300)),
+                    border_radius=14, padding=20,
+                ),
+                ft.Container(height=15),
+
+                # Exportación por tabla
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Exportar Datos por Tabla", size=18, weight=ft.FontWeight.W_600, color=ft.Colors.AMBER_200),
+                        ft.Text("Para exportar tablas individuales en formato CSV, JSON o SQL.",
+                                size=12, color=ft.Colors.WHITE54),
                         ft.Row([export_db, export_table, export_format], wrap=True),
                         ft.Row([
                             export_path,

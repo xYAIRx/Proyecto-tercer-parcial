@@ -13,7 +13,7 @@ from console import build_console_view
 
 
 def main(page: ft.Page):
-    page.title = "Gojo DB Manager — MariaDB"
+    page.title = "DB Manager — MariaDB"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor = "#0d1117"
     page.padding = 0
@@ -82,7 +82,7 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Icon(ft.Icons.STORAGE, size=60, color=ft.Colors.INDIGO_300),
-                    ft.Text("Gojo DB Manager", size=32, weight=ft.FontWeight.BOLD,
+                    ft.Text(" DB Manager", size=32, weight=ft.FontWeight.BOLD,
                             color=ft.Colors.WHITE),
                     ft.Text("Conectar a MariaDB", size=14, color=ft.Colors.WHITE54),
                     ft.Container(height=15),
@@ -153,7 +153,7 @@ def main(page: ft.Page):
                 [
                     ft.Row([
                         ft.Icon(ft.Icons.STORAGE, color=ft.Colors.INDIGO_300, size=24),
-                        ft.Text("Gojo DB Manager", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                        ft.Text(" DB Manager", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
                     ]),
                     ft.Text(server_info_text, size=12, color=ft.Colors.WHITE54),
                     ft.IconButton(
